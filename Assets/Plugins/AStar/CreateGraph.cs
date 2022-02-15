@@ -3,38 +3,79 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using Client;
+using Unity.Collections;
+using Unity.Jobs;
+
 public class CreateGraph : MonoBehaviour
 {    
     public Tilemap tilemap; //tilemap whitch we based to create graph
     Graph graph = new Graph();   
     Dictionary<Node, int> PlatformIds= new Dictionary<Node, int>(); 
     int _nodeIds = 0;
-    
+    // NativeHashMap<int, NativeArray<int>> graphContainer;
+    NativeMultiHashMap<int, int> mgraphContainer;
     // Start is called before the first frame update
     void Start()
     {
         Create();
-        // Pathfinder.Initialize(graph);
-    }
+        mgraphContainer = new NativeMultiHashMap<int, int>(graph.m_Nodes.Count, Allocator.Persistent);
 
+        // graphContainer = new NativeHashMap<int, NativeArray<int>>(graph.m_Nodes.Count, Allocator.Persistent);        
+        foreach (var item in graph.m_Nodes)
+        {
+            // graphContainer.Add(item.Index, new NativeArray<int>(item.m_Connections.Count, Allocator.Persistent) );
+            foreach (var con in item.m_Connections)
+            {
+                // Debug.Log(con.node.Index);
+                
+                mgraphContainer.Add(item.Index, con.node.Index);
+                // graphContainer[item.Index].Add(con.node.Index);
+            }
+            // mgraphContainer.
+        }
+        // var efe = mgraphContainer.GetValuesForKey(7);
+        //  foreach (var item in efe)
+        // {
+        //     Debug.Log(item);
+        // }
+
+        // Pathfinder.Initialize(graph);
+
+        
+    }
+    private void OnDisable() {
+        mgraphContainer.Dispose();
+    }
     // Update is called once per frame
     void Update()
     {
         if (Input.GetKeyDown(KeyCode.LeftShift))
         {
-            // var path = Pathfinder.GetPath(new Vector2Int(21, 6), new Vector2Int(1, -7));
-            // var path = Pathfinder.GetPath( new Vector2Int(-1, -1), new Vector2Int(-2, -1));
-            // path.Reverse();
-            // if (path[path.Count -1].PosVec2 != new Vector2Int(-2, -1))
-            // {
-            //     Debug.LogWarning("dont find");
-            // }
-            // // var path = graph.GetShortestPath(graph.m_Nodes[4], graph.GetNode(new Vector2(23.5f, 5.5f)));
-            // foreach (var item in path)
-            // {
-            //     Debug.Log(item.PosVec2);
-            //     Debug.DrawRay((Vector2)item.PosVec2, Vector3.up, Color.red, 100f);
-            // }
+            var startNode = graph.GetNearestNode(new Vector2Int(-1, -3)).Index;
+            var endNode = graph.GetNearestNode(new Vector2Int(-15, -9)).Index;
+
+
+
+            NativeList<int> result = new NativeList<int>(Allocator.TempJob);
+
+            FindPathJob findPathJob = new FindPathJob();
+            findPathJob.m_graph = mgraphContainer;
+            findPathJob.StartNode = startNode;
+            findPathJob.EndNode = endNode;
+            findPathJob.Result = result;
+
+            JobHandle handle = findPathJob.Schedule();
+            handle.Complete();
+
+            if(handle.IsCompleted)
+            {
+                //do something
+                foreach (var item in result)
+                {
+                    // Debug.DrawRay((Vector2)graph.m_Nodes[item].PosVec2, Vector3.up, Color.red, 100f);
+                }
+                result.Dispose(); //free memory
+            }
         }
     }
     void Create()
@@ -125,12 +166,18 @@ public class CreateGraph : MonoBehaviour
 
                 var rightNode = graph.GetNode(new Vector2Int(position.x + 1, position.y));
                 var leftNode = graph.GetNode(new Vector2Int(position.x - 1, position.y));
-                
-                node.m_Connections.Add(new NodeConnection(rightNode));
-                node.m_Connections.Add(new NodeConnection(leftNode));
 
-                rightNode.m_Connections.Add(new NodeConnection(node));
-                leftNode.m_Connections.Add(new NodeConnection(node));
+                if (!node.hasConnection(rightNode))
+                    node.m_Connections.Add(new NodeConnection(rightNode));
+
+                if (!node.hasConnection(leftNode))
+                    node.m_Connections.Add(new NodeConnection(leftNode));
+
+                if (!rightNode.hasConnection(node))
+                    rightNode.m_Connections.Add(new NodeConnection(node));
+
+                if (!leftNode.hasConnection(node))
+                    leftNode.m_Connections.Add(new NodeConnection(node));
             }
 
             //one step connection from left to right clif of platform
@@ -138,12 +185,15 @@ public class CreateGraph : MonoBehaviour
             {
                 var node = graph.GetNode((Vector2Int)position);
                 var rightNode = graph.GetNode(new Vector2Int(position.x + 1, position.y ));
-                Debug.Log("it works");
+                // Debug.Log("it works");
 
                 if (rightNode.PlatformType == PlatformType.RightCliff)
                 {
-                    node.m_Connections.Add(new NodeConnection(rightNode));
-                    rightNode.m_Connections.Add(new NodeConnection(node));
+                    if (!node.hasConnection(rightNode))
+                        node.m_Connections.Add(new NodeConnection(rightNode));
+
+                    if(!rightNode.hasConnection(node))
+                        rightNode.m_Connections.Add(new NodeConnection(node));
                 }
             }
             //fall links 

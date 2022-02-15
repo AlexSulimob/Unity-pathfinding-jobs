@@ -8,6 +8,18 @@ namespace Client
     {
 
         public List<NodeConnection> m_Connections = new List<NodeConnection>();
+        public bool hasConnection(Node node)
+        {
+            foreach (var item in m_Connections)
+            {
+                if (item.node.index == node.index)
+                {
+                    return true;
+                }
+
+            }
+            return false;
+        }
         public Vector2Int PosVec2 
         {
             get 
