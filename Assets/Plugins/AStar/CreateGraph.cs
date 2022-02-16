@@ -5,7 +5,7 @@ using UnityEngine.Tilemaps;
 using Client;
 using Unity.Collections;
 using Unity.Jobs;
-
+using Unity.Mathematics;
 public class CreateGraph : MonoBehaviour
 {    
     public Tilemap tilemap; //tilemap whitch we based to create graph
@@ -14,11 +14,14 @@ public class CreateGraph : MonoBehaviour
     int _nodeIds = 0;
     // NativeHashMap<int, NativeArray<int>> graphContainer;
     NativeMultiHashMap<int, int> mgraphContainer;
+    NativeMultiHashMap<int, n_node> m_Node_graphContainer;
     // Start is called before the first frame update
     void Start()
     {
         Create();
         mgraphContainer = new NativeMultiHashMap<int, int>(graph.m_Nodes.Count, Allocator.Persistent);
+
+        m_Node_graphContainer = new NativeMultiHashMap<int, n_node>(graph.m_Nodes.Count, Allocator.Persistent);
 
         // graphContainer = new NativeHashMap<int, NativeArray<int>>(graph.m_Nodes.Count, Allocator.Persistent);        
         foreach (var item in graph.m_Nodes)
@@ -28,6 +31,7 @@ public class CreateGraph : MonoBehaviour
             {
                 // Debug.Log(con.node.Index);
                 
+                m_Node_graphContainer.Add(item.Index, new n_node(con.node.Index, con.node.PosInt2));
                 mgraphContainer.Add(item.Index, con.node.Index);
                 // graphContainer[item.Index].Add(con.node.Index);
             }
@@ -45,6 +49,7 @@ public class CreateGraph : MonoBehaviour
     }
     private void OnDisable() {
         mgraphContainer.Dispose();
+        m_Node_graphContainer.Dispose();
     }
     // Update is called once per frame
     void Update()
@@ -54,11 +59,11 @@ public class CreateGraph : MonoBehaviour
             var startNode = graph.GetNearestNode(new Vector2Int(-1, -3)).Index;
             var endNode = graph.GetNearestNode(new Vector2Int(-15, -9)).Index;
 
-
-
+            
+            
             NativeList<int> result = new NativeList<int>(Allocator.TempJob);
 
-            FindPathJob findPathJob = new FindPathJob();
+            FindPathBreadthFirstJob findPathJob = new FindPathBreadthFirstJob();
             findPathJob.m_graph = mgraphContainer;
             findPathJob.StartNode = startNode;
             findPathJob.EndNode = endNode;
@@ -72,10 +77,43 @@ public class CreateGraph : MonoBehaviour
                 //do something
                 foreach (var item in result)
                 {
-                    // Debug.DrawRay((Vector2)graph.m_Nodes[item].PosVec2, Vector3.up, Color.red, 100f);
+                    Debug.DrawRay((Vector2)graph.m_Nodes[item].PosVec2, Vector3.up, Color.red, 100f);
                 }
                 result.Dispose(); //free memory
             }
+        }
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            var startNode = graph.GetNearestNode(new Vector2Int(-1, -3));
+            var endNode = graph.GetNearestNode(new Vector2Int(-15, -9));
+
+            // var her = m_Node_graphContainer.GetKeyArray(Allocator.TempJob);
+
+            NativeList<int> result = new NativeList<int>(Allocator.TempJob);
+            NativeHeap<n_node, mDistanceComparer> frontier = new NativeHeap<n_node, mDistanceComparer>(Allocator.TempJob);
+
+            FindPathAStarJob findPathJob = new FindPathAStarJob();
+            findPathJob.frontier = frontier;
+            findPathJob.m_graph = m_Node_graphContainer;
+            findPathJob.StartNode = new n_node(startNode.Index, startNode.PosInt2);
+            findPathJob.EndNode = new n_node(endNode.Index, endNode.PosInt2);
+            findPathJob.Result = result;
+
+            JobHandle handle = findPathJob.Schedule();
+            handle.Complete();
+
+            if(handle.IsCompleted)
+            {
+                //do something
+                foreach (var item in result)
+                {
+                    Debug.DrawRay((Vector2)graph.m_Nodes[item].PosVec2, Vector3.up, Color.red, 100f);
+                }
+                result.Dispose(); //free memory
+                frontier.Dispose();
+            }
+
+            // her.Dispose();
         }
     }
     void Create()
@@ -283,5 +321,13 @@ public class CreateGraph : MonoBehaviour
             // }
 
         }
+    }
+}
+
+public static class mathExt
+{
+    public static Vector2 ToVector2(this int2 value)
+    {
+        return new Vector2(value.x, value.y);
     }
 }

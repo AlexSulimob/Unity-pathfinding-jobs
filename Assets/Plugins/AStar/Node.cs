@@ -1,10 +1,11 @@
-﻿using Priority_Queue;
+﻿//using Priority_Queue;
 using UnityEngine;
 using System.Collections.Generic;
+using Unity.Mathematics;
 
-namespace Client 
+namespace Client
 {
-    public class Node : FastPriorityQueueNode
+    public class Node //: FastPriorityQueueNode
     {
 
         public List<NodeConnection> m_Connections = new List<NodeConnection>();
@@ -27,6 +28,12 @@ namespace Client
                 return new Vector2Int(positionX, positionY);
             }
         }
+        public int2 PosInt2
+        {
+            get {
+                return new int2(positionX, positionY);
+            }
+        } 
         private Node parent;
         public Node Parent
         {
@@ -123,6 +130,7 @@ namespace Client
             
             platformType = targetType;
         }
+        /*
         public override bool Equals( object obj )
         {
             Node otherTile = obj as Node;
@@ -131,6 +139,7 @@ namespace Client
 
             return Index == otherTile.Index;
         }
+        */
     }
     public enum PlatformType 
     {
@@ -168,7 +177,7 @@ namespace Client
             }
         }
     }
-    public struct AiJump
+    public partial struct AiJump
     {
         public float jumpSpeed;
         public float jumpHeight;
